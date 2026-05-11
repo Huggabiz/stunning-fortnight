@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Retailer Data Importer v0.3.0</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #f8f7f4; --card: #ffffff; --border: #e2e0db; --border-light: #eeecea;
+  --text: #1a1a1a; --text-muted: #6b6560; --text-light: #9a958f;
+  --accent: #2563eb; --accent-hover: #1d4ed8; --accent-bg: #eff4ff;
+  --success: #059669; --success-bg: #ecfdf5;
+  --warn: #d97706; --warn-bg: #fffbeb;
+  --error: #dc2626; --error-bg: #fef2f2;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif; color: var(--text); }
+.header { padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--card); display: flex; align-items: center; justify-content: space-between; }
+.header-logo { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-title { font-size: 16px; font-weight: 700; line-height: 1.2; }
+.header-sub { font-size: 12px; color: var(--text-muted); }
+.steps { display: flex; align-items: center; gap: 4px; }
+.step { font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 99px; color: var(--text-light); }
+.step.active { font-weight: 700; color: var(--accent); background: var(--accent-bg); }
+.step.done { color: var(--success); }
+.step-sep { color: var(--text-light); font-size: 12px; }
+.main { max-width: 1000px; margin: 0 auto; padding: 24px; }
+.drop-zone { border: 2px dashed var(--border); border-radius: 16px; padding: 60px 40px; cursor: pointer; transition: all 0.2s; max-width: 560px; margin: 40px auto; background: var(--card); text-align: center; }
+.drop-zone:hover { border-color: var(--accent); background: var(--accent-bg); }
+.drop-zone h3 { font-size: 18px; font-weight: 600; margin: 16px 0 8px; }
+.drop-zone p { font-size: 14px; color: var(--text-muted); }
+.info-bar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 10px; margin-bottom: 16px; font-size: 14px; flex-wrap: wrap; }
+.info-bar.blue { background: var(--accent-bg); color: var(--accent); }
+.info-bar.green { background: var(--success-bg); color: var(--success); }
+.info-bar.orange { background: var(--warn-bg); color: var(--warn); }
+.info-bar.red { background: var(--error-bg); color: var(--error); }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em; }
+.badge-default { background: var(--border-light); color: var(--text-muted); }
+.badge-blue { background: var(--accent-bg); color: var(--accent); }
+.badge-green { background: var(--success-bg); color: var(--success); }
+.section-label { font-size: 13px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+.btn { padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 14px; font-weight: 600; font-family: 'DM Sans', sans-serif; display: inline-flex; align-items: center; gap: 8px; transition: all 0.15s; }
+.btn-accent { background: var(--accent); color: #fff; }
+.btn-accent:hover { background: var(--accent-hover); }
+.btn-success { background: var(--success); color: #fff; }
+.btn-outline { background: var(--card); color: var(--text-muted); border: 1px solid var(--border); }
+.btn-sm { padding: 8px 16px; font-size: 13px; }
+.btn-danger { background: var(--error); color: #fff; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.retailer-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+.retailer-btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; font-size: 13px; font-weight: 600; font-family: 'DM Sans', sans-serif; background: var(--card); color: var(--text); transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; }
+.retailer-btn.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+.meta-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+.meta-grid label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px; }
+.meta-grid input, .meta-grid select { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: 'DM Sans', sans-serif; color: var(--text); background: var(--card); outline: none; box-sizing: border-box; }
+.meta-grid .span2 { grid-column: 2 / 4; }
+.meta-grid .span3 { grid-column: 1 / 4; }
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.stat-card { padding: 14px 16px; background: var(--card); border-radius: 10px; border: 1px solid var(--border-light); }
+.stat-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.stat-value { font-size: 20px; font-weight: 700; }
+.classification { padding: 14px 16px; background: var(--accent-bg); border-radius: 10px; margin-bottom: 24px; font-size: 14px; color: var(--accent); }
+.warning-bar { padding: 12px 16px; background: var(--warn-bg); border-radius: 8px; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: var(--warn); font-size: 14px; }
+.data-table-wrap { overflow: auto; max-height: 400px; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 24px; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'DM Mono', 'JetBrains Mono', monospace; }
+.data-table thead th { padding: 8px 12px; text-align: left; font-weight: 600; background: #f5f4f1; border-bottom: 2px solid var(--border); position: sticky; top: 0; white-space: nowrap; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.data-table tbody td { padding: 6px 12px; white-space: nowrap; max-width: 200px; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--border-light); }
+.table-footer { padding: 8px 12px; text-align: center; font-size: 12px; color: var(--text-muted); background: #f5f4f1; }
+.actions { display: flex; gap: 12px; margin-top: 16px; }
+.export-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.export-card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.export-card-title { font-size: 15px; font-weight: 700; }
+.export-card-sub { font-size: 12px; color: var(--text-muted); font-family: monospace; }
+.export-hint { font-size: 12px; color: var(--text-muted); margin-top: 8px; }
+.sheet-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 24px; }
+.sheet-btn { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; font-size: 12px; font-weight: 600; font-family: 'DM Sans', sans-serif; background: var(--card); color: var(--text); }
+.sheet-btn.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+.done-center { text-align: center; margin-bottom: 32px; }
+.done-icon { width: 56px; height: 56px; border-radius: 50%; background: var(--success-bg); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+.file-list { margin-bottom: 24px; }
+.file-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--card); border: 1px solid var(--border-light); border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+.file-item .fname { font-weight: 600; }
+.file-item .fmeta { color: var(--text-muted); font-size: 12px; }
+.file-item .remove-btn { background: none; border: none; cursor: pointer; color: var(--text-light); font-size: 18px; padding: 0 4px; }
+.file-item .remove-btn:hover { color: var(--error); }
+.toggle-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--card); border: 1px solid var(--border-light); border-radius: 8px; margin-bottom: 16px; font-size: 13px; cursor: pointer; }
+.toggle-row input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <div class="header-logo">
+      <svg width="18" height="18" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    </div>
+    <div>
+      <div class="header-title">Retailer Data Importer</div>
+      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.1</div>
+    </div>
+  </div>
+  <div class="steps" id="stepIndicator"></div>
+</div>
+
+<div class="main" id="mainContent"></div>
+
+<input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple style="display:none">
+
+<script>
+const APP_VERSION = "0.3.1";
+
+// ─── STATE ───
+const S = {
+  step: "upload",
+  // Multi-file state
+  files: [],        // [{file, fileData, workbook, sheetNames, detectedRetailer}]
+  confirmedFormat: null,  // The retailer format all files must share
+  selectedSheets: [],
+  blankSkuCode: false,   // Toggle: blank out sku_code column
+  metadata: { retailer: "", period_type: "WEEKLY", location_type: "TOTAL" },
+  parsedRows: [], parseError: null, parseStats: null,
+  exportData: { csv: "", filename: "" },
+  processing: false,
+};
+
+// ─── UTILITIES ───
+const cleanStr = v => (v == null ? "" : String(v).trim());
+const cleanNum = v => { if (v == null || v === "" || v === " ") return null; const n = typeof v === "number" ? v : parseFloat(String(v).replace(/,/g, "").trim()); return isNaN(n) ? null : n; };
+const fmtDate = d => { if (!d) return ""; const dt = d instanceof Date ? d : new Date(d); return isNaN(dt) ? "" : dt.toISOString().slice(0, 10); };
+const parseDate = s => { if (!s) return null; if (s instanceof Date) return s; const str = String(s).trim(); let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); if (m) return new Date(+m[3], +m[2]-1, +m[1]); m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/); if (m) return new Date(+m[1], +m[2]-1, +m[3]); const d = new Date(str); return isNaN(d) ? null : d; };
+const generateImportId = r => { const ts = new Date().toISOString().slice(0,10).replace(/-/g,""); const seq = String(Math.floor(Math.random()*999)+1).padStart(3,"0"); return `${r.toUpperCase().replace(/\s+/g,"_")}_${ts}_${seq}`; };
+const escCsv = v => { if (v==null) return ""; const s=String(v); return (s.includes(",")||s.includes('"')||s.includes("\n")) ? `"${s.replace(/"/g,'""')}"` : s; };
+const rowsToCsv = (cols, rows) => cols.join(",") + "\n" + rows.map(r => cols.map(c => escCsv(r[c])).join(",")).join("\n");
+const sheetToAoa = (wb, name) => { const ws = wb.Sheets[name]; if (!ws) return []; return XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true }); };
+const csvToAoa = text => { const wb = XLSX.read(text, { type: "string" }); return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: null, raw: true }); };
+const downloadBlob = (content, filename, type = "text/csv") => { const blob = new Blob([content], { type: type + ";charset=utf-8;" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url); };
+
+const OUTPUT_COLUMNS = ["import_id","import_timestamp","source_filename","retailer","period_start","period_end","period_type","sku_code","sku_source","sku_retailer_code","product_description","ean","location_type","location_name","sales_units","returns_units","demand_units","stock_units","stock_available","stock_in_transit","stock_on_order","weeks_cover","availability_pct","serviceability_pct","data_types"];
+
+// ─── RETAILER DETECTION ───
+const RETAILERS = [
+  { id: "argos_sales", name: "Argos Sales", detect: (f,r) => /prodslsdyn/i.test(f) && /argos/i.test(f) && /sales/i.test(f) },
+  { id: "argos_stock", name: "Argos Stock", detect: (f,r) => /stockwrhs/i.test(f) && /argos/i.test(f) },
+  { id: "john_lewis", name: "John Lewis", detect: (f,r) => /john.?lewis/i.test(f) || (r?.[0]?.some?.(c => /Product Code/i.test(cleanStr(c))) && r?.[0]?.some?.(c => /Branch Name/i.test(cleanStr(c)))) },
+  { id: "dunelm", name: "Dunelm", detect: (f,r,sn) => /dunelm/i.test(f) || (sn?.length>3 && r?.[0]?.some?.(c => /Avail\s*%/i.test(cleanStr(c)))) },
+  { id: "sainsburys", name: "Sainsbury's", detect: (f,r) => /sainsbury/i.test(f) || r?.some?.(row => row?.some?.(c => /Supplier Sales Report/i.test(cleanStr(c)))) },
+  { id: "selfridges", name: "Selfridges", detect: (f,r) => /selfridge/i.test(f) || (r?.[0]?.some?.(c => /joseph\s*joseph/i.test(cleanStr(c))) && r?.[3]?.some?.(c => /SPTI/i.test(cleanStr(c)))) },
+  { id: "fenwick", name: "Fenwick", detect: (f,r) => /fenwick/i.test(f) || /BIREP/i.test(f) || (r?.[0]?.some?.(c => /NEWCASTLE/i.test(cleanStr(c))) && r?.[0]?.some?.(c => /KINGSTON/i.test(cleanStr(c)))) },
+];
+const detectRetailer = (fname, rows, sheetNames) => { for (const r of RETAILERS) { try { if (r.detect(fname, rows, sheetNames)) return r; } catch {} } return null; };
+
+// ─── PARSERS (unchanged from v0.2.0) ───
+const parseArgosSales = (data, meta) => {
+  const rows=data; if(rows.length<6) return {error:"File too short for Argos Sales format"};
+  const dateRow=rows[0]||[],metricRow=rows[2]||[];
+  const dateColumns=[]; const year=meta.period_start?new Date(meta.period_start).getFullYear():new Date().getFullYear();
+  for(let c=4;c<dateRow.length;c++){const ds=cleanStr(dateRow[c]),ms=cleanStr(metricRow[c]);const dm=ds.match(/\((\d{2})\/(\d{2})\)/);if(dm){let metric="sales_units";if(/demand/i.test(ms))metric="demand_units";else if(/serviceability/i.test(ms))metric="serviceability_pct";dateColumns.push({col:c,date:new Date(year,parseInt(dm[2])-1,parseInt(dm[1])),metric});}else if(/day total/i.test(ds)){let metric="sales_units";if(/demand/i.test(ms))metric="demand_units";else if(/serviceability/i.test(ms))metric="serviceability_pct";dateColumns.push({col:c,date:null,metric,isTotal:true});}}
+  const dateGroups={};dateColumns.filter(d=>d.date&&!d.isTotal).forEach(d=>{const k=fmtDate(d.date);if(!dateGroups[k])dateGroups[k]={date:d.date,metrics:{}};dateGroups[k].metrics[d.metric]=d.col;});
+  const results=[];
+  for(let r=5;r<rows.length;r++){const row=rows[r];if(!row||!row[0])continue;const productNo=cleanStr(row[0]),desc=cleanStr(row[1]),manRef=cleanStr(row[3]);if(!productNo||!desc)continue;for(const[dk,g]of Object.entries(dateGroups)){const sales=g.metrics.sales_units!=null?cleanNum(row[g.metrics.sales_units]):null;const demand=g.metrics.demand_units!=null?cleanNum(row[g.metrics.demand_units]):null;const svc=g.metrics.serviceability_pct!=null?cleanNum(row[g.metrics.serviceability_pct]):null;if(sales==null&&demand==null&&svc==null)continue;results.push({retailer:"Argos",period_start:dk,period_end:dk,period_type:"DAILY",sku_code:manRef||productNo,sku_source:manRef?"JJ_SKU":"RETAILER_CODE",sku_retailer_code:productNo,product_description:desc,ean:"",location_type:"TOTAL",location_name:"",sales_units:sales,returns_units:null,demand_units:demand,stock_units:null,stock_available:null,stock_in_transit:null,stock_on_order:null,weeks_cover:null,availability_pct:null,serviceability_pct:svc,data_types:"SALES"});}}
+  return {rows:results};
+};
+const parseArgosStock = (data, meta) => {
+  const rows=data;let stockDate=meta.period_start;const dm=cleanStr(rows[0]?.[0]).match(/(\d{2}\/\d{2}\/\d{4})/);if(dm)stockDate=fmtDate(parseDate(dm[1]));
+  const results=[];for(let r=5;r<rows.length;r++){const row=rows[r];if(!row||!row[0])continue;results.push({retailer:"Argos",period_start:stockDate||meta.period_start,period_end:stockDate||meta.period_end,period_type:"SNAPSHOT",sku_code:cleanStr(row[3])||cleanStr(row[0]),sku_source:cleanStr(row[3])?"JJ_SKU":"RETAILER_CODE",sku_retailer_code:cleanStr(row[0]),product_description:cleanStr(row[1]),ean:"",location_type:"WAREHOUSE",location_name:cleanStr(row[4]),sales_units:null,returns_units:null,demand_units:null,stock_units:cleanNum(row[7]),stock_available:null,stock_in_transit:null,stock_on_order:cleanNum(row[8]),weeks_cover:cleanNum(row[9]),availability_pct:null,serviceability_pct:null,data_types:"STOCK"});}
+  return {rows:results,detectedDate:stockDate};
+};
+const parseJohnLewis = (data, meta) => {
+  const rows=data;if(rows.length<2)return{error:"File too short"};const results=[];
+  for(let r=1;r<rows.length;r++){const row=rows[r];if(!row||row[0]==null)continue;let ean=row[1];if(ean&&typeof ean==="number")ean=String(Math.round(ean));else ean=cleanStr(ean);results.push({retailer:"John Lewis",period_start:meta.period_start,period_end:meta.period_end,period_type:"WEEKLY",sku_code:cleanStr(row[0]),sku_source:"RETAILER_CODE",sku_retailer_code:cleanStr(row[0]),product_description:cleanStr(row[2]),ean:ean,location_type:"STORE",location_name:cleanStr(row[4]),sales_units:cleanNum(row[5]),returns_units:cleanNum(row[6]),demand_units:null,stock_units:cleanNum(row[7]),stock_available:cleanNum(row[8]),stock_in_transit:cleanNum(row[11]),stock_on_order:cleanNum(row[12]),weeks_cover:null,availability_pct:null,serviceability_pct:null,data_types:"SALES|STOCK|RETURNS"});}
+  return {rows:results};
+};
+const parseDunelm = (wb, meta, selectedSheets) => {
+  const allResults=[],sheets=selectedSheets.length?selectedSheets:wb.SheetNames;
+  for(const sn of sheets){const rows=sheetToAoa(wb,sn);if(rows.length<3)continue;let sheetDate=null;const parts=sn.split(".");if(parts.length===2){sheetDate=new Date(parseInt(parts[1])-1>=6?2025:2026,parseInt(parts[1])-1,parseInt(parts[0]));}else if(parts.length===3){sheetDate=new Date(2000+parseInt(parts[2]),parseInt(parts[1])-1,parseInt(parts[0]));}const pd=sheetDate?fmtDate(sheetDate):meta.period_start;let hi=-1;for(let r=0;r<Math.min(5,rows.length);r++){if(rows[r]?.some(c=>/^Item$/i.test(cleanStr(c)))){hi=r;break;}}if(hi<0)continue;const headers=rows[hi].map(c=>cleanStr(c)),colIdx={};headers.forEach((h,i)=>{if(h)colIdx[h]=i;});
+  for(let r=hi+1;r<rows.length;r++){const row=rows[r];if(!row)continue;const item=cleanStr(row[colIdx["Item"]]);if(!item)continue;allResults.push({retailer:"Dunelm",period_start:pd,period_end:pd,period_type:"WEEKLY",sku_code:item,sku_source:"RETAILER_CODE",sku_retailer_code:item,product_description:cleanStr(row[colIdx["Description"]]),ean:"",location_type:"TOTAL",location_name:"",sales_units:cleanNum(row[colIdx["Last Week"]]),returns_units:null,demand_units:null,stock_units:cleanNum(row[colIdx["Store SoH"]]),stock_available:null,stock_in_transit:cleanNum(row[colIdx["Store In Transit"]]),stock_on_order:cleanNum(row[colIdx["Store Expected"]]),weeks_cover:cleanNum(row[colIdx["Weeks Cover"]]),availability_pct:cleanNum(row[colIdx["Avail %"]]),serviceability_pct:null,data_types:"SALES|STOCK|AVAILABILITY",_sheet:sn});}}
+  return {rows:allResults};
+};
+const parseSainsburys = (data, meta) => {
+  const rows=data;let updatedDate=null;for(let r=0;r<Math.min(5,rows.length);r++){const dm=cleanStr(rows[r]?.[0]).match(/Last Updated Date.*?(\w+,\s+\w+\s+\d+,\s+\d{4})/i);if(dm){updatedDate=new Date(dm[1]);break;}}
+  let hi=-1;for(let r=0;r<Math.min(10,rows.length);r++){if(rows[r]?.some(c=>/Sku Key/i.test(cleanStr(c)))){hi=r;break;}}if(hi<0)return{error:"Cannot find Sainsbury's header row"};
+  const groupRow=rows[hi],weekRow=rows[hi+1],metaCols={},dataCols=[];let currentGroup="";
+  for(let c=0;c<groupRow.length;c++){const grp=cleanStr(groupRow[c]),wk=cleanStr(weekRow?.[c]);if(/Trading Account/i.test(grp))metaCols.tradingAccount=c;else if(/Sku Key/i.test(grp))metaCols.skuKey=c;else if(/Sku Name/i.test(grp))metaCols.skuName=c;else if(/EAN/i.test(grp))metaCols.ean=c;if(grp&&!/Trading|Sku|EAN/i.test(grp))currentGroup=grp;if(/Last Week/i.test(wk)){let off=0;const om=wk.match(/-(\d+)/);if(om)off=parseInt(om[1]);dataCols.push({col:c,group:currentGroup,weekOffset:off});}}
+  const getWeekDate=off=>{if(!updatedDate||isNaN(updatedDate))return null;const d=new Date(updatedDate);d.setDate(d.getDate()-7*(off+1));return d;};
+  const results=[];let as=hi+2;while(as<rows.length&&(!rows[as]||!rows[as][metaCols.skuKey]))as++;
+  for(let r=as;r<rows.length;r++){const row=rows[r];if(!row||!row[metaCols.skuKey])continue;const sk=cleanStr(row[metaCols.skuKey]),sn=cleanStr(row[metaCols.skuName]),ean=cleanStr(row[metaCols.ean]);for(const dc of dataCols.filter(d=>/Grand Total/i.test(d.group))){const val=cleanNum(row[dc.col]);if(val==null)continue;const wd=getWeekDate(dc.weekOffset),ps=wd?fmtDate(wd):meta.period_start;results.push({retailer:"Sainsburys",period_start:ps,period_end:ps,period_type:"WEEKLY",sku_code:sk,sku_source:"RETAILER_CODE",sku_retailer_code:sk,product_description:sn,ean:ean,location_type:"TOTAL",location_name:"",sales_units:val,returns_units:null,demand_units:null,stock_units:null,stock_available:null,stock_in_transit:null,stock_on_order:null,weeks_cover:null,availability_pct:null,serviceability_pct:null,data_types:"SALES"});}}
+  return {rows:results,detectedDate:updatedDate?fmtDate(updatedDate):null};
+};
+const parseSelfridges = (data, meta) => {
+  const rows=data;let weekNum=null;if(rows[1])weekNum=cleanNum(rows[1][1]);let hi=3;for(let r=2;r<Math.min(6,rows.length);r++){if(rows[r]?.some(c=>/^sku$/i.test(cleanStr(c)))){hi=r;break;}}
+  const headers=(rows[hi]||[]).map(c=>cleanStr(c)),colIdx={};headers.forEach((h,i)=>{if(h)colIdx[h.toLowerCase()]=i;});const results=[];
+  for(let r=hi+1;r<rows.length;r++){const row=rows[r];if(!row||!row[colIdx["sku"]])continue;const sku=cleanStr(row[colIdx["sku"]]),desc=cleanStr(row[colIdx["description"]]),vpn=cleanStr(row[colIdx["vpn"]]);const totalStock=cleanNum(row[colIdx["total stock units"]]),storeStock=cleanNum(row[colIdx["store stock units"]]),onOrder=cleanNum(row[colIdx["on order units"]]),lwSales=cleanNum(row[colIdx["lw sales units"]]);results.push({retailer:"Selfridges",period_start:meta.period_start,period_end:meta.period_end,period_type:"WEEKLY",sku_code:vpn||sku,sku_source:vpn?"JJ_SKU":"RETAILER_CODE",sku_retailer_code:String(sku),product_description:desc,ean:"",location_type:"TOTAL",location_name:"",sales_units:lwSales,returns_units:null,demand_units:null,stock_units:totalStock,stock_available:storeStock,stock_in_transit:null,stock_on_order:onOrder,weeks_cover:null,availability_pct:null,serviceability_pct:null,data_types:totalStock!=null?"SALES|STOCK":"SALES"});}
+  return {rows:results,weekNumber:weekNum};
+};
+const parseFenwick = (data, meta) => {
+  const rows=data;if(rows.length<3)return{error:"File too short"};const storeRow=rows[0]||[],headerRow=rows[1]||[];
+  const SP={"NEWCASTLE":"NCL","KINGSTON":"KNG","BRENT CROSS":"BRX","CANTERBURY":"CNT","TUNBRIDGE WELLS":"RTW","BRACKNELL":"BRA","YORK":"YRK","DIGITAL":"DIG","COLCHESTER":"COL","KILLINGWORTH":"KLW"};
+  const storeRanges=[];let cs=null,ss=-1;for(let c=0;c<storeRow.length;c++){const v=cleanStr(storeRow[c]).replace(/\n/g,"").trim();if(v&&Object.keys(SP).some(s=>v.toUpperCase().includes(s))){if(cs)storeRanges.push({name:cs,startCol:ss,endCol:c-1});cs=v.toUpperCase().trim();ss=c;}}if(cs)storeRanges.push({name:cs,startCol:ss,endCol:headerRow.length-1});
+  const hdr=headerRow.map(c=>cleanStr(c).toLowerCase()),findCol=p=>hdr.findIndex(h=>p.test(h));const vpnCol=findCol(/^vpn$/i),styleCol=findCol(/style id/i),nameCol=findCol(/product name/i),eanCol=findCol(/^ean/i),brandCol=findCol(/^brand$/i);const results=[];
+  for(let r=2;r<rows.length;r++){const row=rows[r];if(!row)continue;const vpn=cleanStr(row[vpnCol]),styleid=cleanStr(row[styleCol]),pname=cleanStr(row[nameCol]),ean=cleanStr(row[eanCol]),brand=cleanStr(row[brandCol]);if(!vpn&&!pname)continue;if(brand&&!/joseph/i.test(brand))continue;
+  for(const store of storeRanges){let soldCol=-1,invCol=-1;for(let c=store.startCol;c<=Math.min(store.endCol,headerRow.length-1);c++){const h=cleanStr(headerRow[c]);if(/Units Sold TY$/i.test(h))soldCol=c;if(/Physical Inventory TY$/i.test(h))invCol=c;}const su=soldCol>=0?cleanNum(row[soldCol]):null,st=invCol>=0?cleanNum(row[invCol]):null;if(su==null&&st==null)continue;if(su===0&&st===0)continue;const sn=store.name.replace(/\n/g,"").trim(),lt=/KILLINGWORTH/i.test(sn)?"WAREHOUSE":(/DIGITAL/i.test(sn)?"ONLINE":"STORE");results.push({retailer:"Fenwick",period_start:meta.period_start,period_end:meta.period_end,period_type:"SNAPSHOT",sku_code:vpn||styleid,sku_source:vpn?"JJ_SKU":"RETAILER_CODE",sku_retailer_code:styleid||vpn,product_description:pname,ean:ean,location_type:lt,location_name:sn,sales_units:su,returns_units:null,demand_units:null,stock_units:st,stock_available:null,stock_in_transit:null,stock_on_order:null,weeks_cover:null,availability_pct:null,serviceability_pct:null,data_types:[su!=null?"SALES":null,st!=null?"STOCK":null].filter(Boolean).join("|")});}}
+  return {rows:results};
+};
+
+// ─── DATE INFERENCE (per file) ───
+function inferDates(f, rawData, det, sheetNames) {
+  const dates = { period_start: "", period_end: "", period_type: "WEEKLY" };
+  if (!det) return dates;
+  if (det.id==="argos_stock") {
+    const dm=cleanStr(rawData[0]?.[0]).match(/(\d{2}\/\d{2}\/\d{4})/);
+    if(dm){const d=fmtDate(parseDate(dm[1]));dates.period_start=d;dates.period_end=d;dates.period_type="SNAPSHOT";}
+  } else if (det.id==="argos_sales") {
+    const dr=rawData[0]||[],yr=new Date().getFullYear(),ds=[];
+    for(const c of dr){const m=cleanStr(c).match(/\((\d{2})\/(\d{2})\)/);if(m)ds.push(new Date(yr,parseInt(m[2])-1,parseInt(m[1])));}
+    if(ds.length){ds.sort((a,b)=>a-b);dates.period_start=fmtDate(ds[0]);dates.period_end=fmtDate(ds[ds.length-1]);dates.period_type="DAILY";}
+  } else if (det.id==="john_lewis") {
+    const fm=f.name.match(/(\d{2})(\d{2})(\d{2})__(\d{2})(\d{2})(\d{2})/);
+    if(fm){dates.period_start=fmtDate(new Date(2000+parseInt(fm[3]),parseInt(fm[2])-1,parseInt(fm[1])));dates.period_end=fmtDate(new Date(2000+parseInt(fm[6]),parseInt(fm[5])-1,parseInt(fm[4])));}
+  } else if (det.id==="sainsburys") {
+    for(let r=0;r<Math.min(5,rawData.length);r++){const dm=cleanStr(rawData[r]?.[0]).match(/Last Updated Date.*?(\w+,\s+\w+\s+\d+,\s+\d{4})/i);if(dm){const d=new Date(dm[1]);if(!isNaN(d)){dates.period_end=fmtDate(d);const s=new Date(d);s.setDate(s.getDate()-28);dates.period_start=fmtDate(s);}break;}}
+  } else if (det.id==="selfridges") {
+    const wm=f.name.match(/wk[\s_]*(\d+)/i);
+    if(wm){const wkNum=parseInt(wm[1]),yr=new Date().getFullYear(),jan4=new Date(yr,0,4),dow=jan4.getDay()||7,wk1Mon=new Date(jan4);wk1Mon.setDate(jan4.getDate()-(dow-1));const wkStart=new Date(wk1Mon);wkStart.setDate(wk1Mon.getDate()+(wkNum-1)*7);const wkEnd=new Date(wkStart);wkEnd.setDate(wkStart.getDate()+6);dates.period_start=fmtDate(wkStart);dates.period_end=fmtDate(wkEnd);}
+  } else if (det.id==="dunelm") {
+    dates.period_type="WEEKLY";
+    const sd=[];for(const sn of sheetNames){const p=sn.split(".");if(p.length===2){sd.push(new Date(parseInt(p[1])-1>=6?2025:2026,parseInt(p[1])-1,parseInt(p[0])));}else if(p.length===3){sd.push(new Date(2000+parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0])));}}
+    if(sd.length){sd.sort((a,b)=>a-b);dates.period_start=fmtDate(sd[0]);dates.period_end=fmtDate(sd[sd.length-1]);}
+  } else if (det.id==="fenwick") {
+    dates.period_type="SNAPSHOT";const fd=f.name.match(/(\d{4})(\d{2})(\d{2})/);if(fd){const d=fmtDate(new Date(+fd[1],+fd[2]-1,+fd[3]));dates.period_start=d;dates.period_end=d;}
+  }
+  return dates;
+}
+
+// ─── RENDER ───
+const $=id=>document.getElementById(id);
+const main=$("mainContent");
+
+function render(){
+  const steps=["upload","detect","preview","export"],labels=["Upload","Configure","Preview","Export"],ci=steps.indexOf(S.step);
+  $("stepIndicator").innerHTML=steps.map((s,i)=>{const active=i===ci,done=i<ci;return (i>0?'<span class="step-sep">›</span>':'')+`<span class="step ${active?'active':''} ${done?'done':''}">${done?'✓ ':''}${labels[i]}</span>`;}).join("");
+  switch(S.step){
+    case "upload": renderUpload(); break;
+    case "detect": renderDetect(); break;
+    case "preview": renderPreview(); break;
+    case "export": renderExport(); break;
+  }
+}
+
+function renderUpload(){
+  main.innerHTML=`<div style="text-align:center;padding:40px 20px">
+    <div class="drop-zone" id="dropZone">
+      <svg width="40" height="40" fill="none" stroke="var(--accent)" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      <h3>Drop retailer files here</h3>
+      <p>CSV or Excel (.xlsx) — select one or more files of the <strong>same retailer format</strong></p>
+      <p style="margin-top:8px;font-size:12px;color:var(--text-light)">Supported: Argos Sales, Argos Stock, John Lewis, Dunelm, Sainsbury's, Selfridges, Fenwick</p>
+    </div></div>`;
+  const dz=$("dropZone");
+  dz.addEventListener("click",()=>$("fileInput").click());
+  dz.addEventListener("dragover",e=>e.preventDefault());
+  dz.addEventListener("drop",handleFiles);
+  $("fileInput").onchange=handleFiles;
+}
+
+async function handleFiles(e){
+  e.preventDefault();
+  const fileList=e.dataTransfer?.files||e.target?.files;if(!fileList||!fileList.length)return;
+  S.parseError=null;
+
+  for(const f of fileList){
+    try{
+      const isCSV=f.name.toLowerCase().endsWith(".csv");let rawData,wb=null,sheetNames=[];
+      if(isCSV){rawData=csvToAoa(await f.text());}
+      else{wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true});sheetNames=wb.SheetNames;rawData=sheetToAoa(wb,sheetNames[0]);}
+      const det=detectRetailer(f.name,rawData?.slice(0,10),sheetNames);
+
+      // Format consistency check
+      if(S.files.length>0 && S.confirmedFormat){
+        if(!det || det.id !== S.confirmedFormat.id){
+          S.parseError=`"${f.name}" detected as ${det?det.name:'Unknown'} — does not match ${S.confirmedFormat.name}. All files must be the same format. This file was skipped.`;
+          continue;
+        }
+      }
+
+      if(!det){
+        S.parseError=`"${f.name}" — format not recognised. Only supported retailer formats can be imported.`;
+        continue;
+      }
+
+      // Set confirmed format from first file
+      if(!S.confirmedFormat) S.confirmedFormat=det;
+
+      const dates=inferDates(f, rawData, det, sheetNames);
+      S.files.push({file:f, fileData:rawData, workbook:wb, sheetNames, detectedRetailer:det, dates});
+
+      // If Dunelm, collect all sheets
+      if(det.id==="dunelm"&&wb){
+        for(const sn of sheetNames){if(!S.selectedSheets.includes(sn))S.selectedSheets.push(sn);}
+      }
+    }catch(err){S.parseError=`Error reading "${f.name}": ${err.message}`;}
+  }
+
+  if(S.files.length){
+    S.metadata.retailer=S.confirmedFormat.name;
+    S.metadata.period_type=S.files[0].dates.period_type||"WEEKLY";
+  }
+
+  S.step="detect";render();
+}
+
+function removeFile(idx){
+  S.files.splice(idx,1);
+  if(S.files.length===0){S.confirmedFormat=null;S.selectedSheets=[];S.metadata={retailer:"",period_type:"WEEKLY",location_type:"TOTAL"};S.step="upload";}
+  else{} // dates are per-file, no global recalc needed
+  render();
+}
+
+function renderDetect(){
+  const fmt=S.confirmedFormat;
+  let html=``;
+
+  // Detected format
+  html+=`<div class="info-bar green"><strong>Format: ${fmt?.name||'Unknown'}</strong> <span class="badge badge-blue">${S.files.length} file${S.files.length>1?'s':''}</span></div>`;
+
+  if(S.parseError) html+=`<div class="info-bar red">${S.parseError}</div>`;
+
+  // File list with per-file date inputs
+  const anyInferred=S.files.some(f=>f.dates.period_start||f.dates.period_end);
+  html+=`<div class="section-label">Files & Periods</div>`;
+  if(anyInferred) html+=`<div style="font-size:12px;color:var(--success);margin-bottom:8px;display:flex;align-items:center;gap:6px"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Dates pre-filled where detected — please verify each file</div>`;
+  html+=`<div class="file-list">`;
+  S.files.forEach((f,i)=>{
+    const noStart=!f.dates.period_start,noEnd=!f.dates.period_end;
+    const warnBorder=(noStart||noEnd)?'border-color:var(--warn);':'';
+    html+=`<div class="file-item" style="flex-wrap:wrap;gap:8px;${warnBorder}">
+      <div style="flex:1;min-width:180px"><span class="fname">${f.file.name}</span></div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <label style="font-size:11px;color:var(--text-muted)">From</label>
+        <input type="date" value="${f.dates.period_start||''}" onchange="S.files[${i}].dates.period_start=this.value" style="padding:4px 8px;border:1px solid ${noStart?'var(--warn)':'var(--border)'};border-radius:4px;font-size:13px;font-family:'DM Sans',sans-serif;${noStart?'background:var(--warn-bg);':''}">
+        <label style="font-size:11px;color:var(--text-muted)">To</label>
+        <input type="date" value="${f.dates.period_end||''}" onchange="S.files[${i}].dates.period_end=this.value" style="padding:4px 8px;border:1px solid ${noEnd?'var(--warn)':'var(--border)'};border-radius:4px;font-size:13px;font-family:'DM Sans',sans-serif;${noEnd?'background:var(--warn-bg);':''}">
+      </div>
+      <button class="remove-btn" onclick="removeFile(${i})" title="Remove">✕</button>
+    </div>`;
+  });
+  html+=`</div>`;
+  html+=`<div style="margin:12px 0 24px"><button class="btn btn-outline btn-sm" onclick="document.getElementById('fileInput').click()">+ Add More Files</button></div>`;
+
+  // Format override (only predefined formats)
+  html+=`<div class="section-label">Retailer Format</div><div class="retailer-btns">`;
+  for(const r of RETAILERS) html+=`<button class="retailer-btn ${fmt?.id===r.id?'selected':''}" onclick="overrideFormat('${r.id}')">${r.name}${fmt?.id===r.id?' ✓':''}</button>`;
+  html+=`</div>`;
+
+  // Dunelm sheet selector
+  if(fmt?.id==="dunelm"){
+    const allSheets=[];S.files.forEach(f=>{if(f.workbook)f.workbook.SheetNames.forEach(sn=>{if(!allSheets.includes(sn))allSheets.push(sn);});});
+    if(allSheets.length){
+      html+=`<div class="section-label">Sheets to Import</div><div class="sheet-btns">`;
+      for(const sn of allSheets) html+=`<button class="sheet-btn ${S.selectedSheets.includes(sn)?'selected':''}" onclick="toggleSheet('${sn}')">${sn}</button>`;
+      html+=`<button class="sheet-btn" onclick="toggleAllSheets()" style="border-color:var(--accent);color:var(--accent)">${S.selectedSheets.length===allSheets.length?'Deselect All':'Select All'}</button></div>`;
+    }
+  }
+
+  // SKU blanking toggle
+  html+=`<div class="section-label">Options</div>`;
+  html+=`<label class="toggle-row"><input type="checkbox" ${S.blankSkuCode?'checked':''} onchange="S.blankSkuCode=this.checked"> <div><strong>Blank out SKU code column</strong><br><span style="font-size:12px;color:var(--text-muted)">Use this when the file only contains the retailer's own product codes, not JJ SKU codes. The sku_code field will be left empty — the retailer code is still captured in sku_retailer_code.</span></div></label>`;
+
+  // Period type (global)
+  html+=`<div class="section-label" style="margin-top:16px">Period Type</div>
+  <div style="margin-bottom:24px"><select onchange="S.metadata.period_type=this.value" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:'DM Sans',sans-serif;">
+    <option value="DAILY" ${S.metadata.period_type==="DAILY"?"selected":""}>Daily</option>
+    <option value="WEEKLY" ${S.metadata.period_type==="WEEKLY"?"selected":""}>Weekly</option>
+    <option value="4_WEEK" ${S.metadata.period_type==="4_WEEK"?"selected":""}>4 Week</option>
+    <option value="SNAPSHOT" ${S.metadata.period_type==="SNAPSHOT"?"selected":""}>Snapshot</option>
+  </select></div>`;
+
+  // Warn if any file is missing dates
+  const missingDates=S.files.some(f=>!f.dates.period_start||!f.dates.period_end);
+  if(missingDates) html+=`<div class="warning-bar">⚠ Some files are missing period dates — please fill them in above before parsing.</div>`;
+
+  html+=`<div class="actions">
+    <button class="btn btn-outline" onclick="resetAll()">← Start Over</button>
+    <button class="btn btn-accent" onclick="doParse()" ${!fmt?'disabled':''}>${S.processing?'Parsing...':'👁 Parse & Preview'}</button>
+  </div>`;
+  main.innerHTML=html;
+}
+
+function overrideFormat(id){
+  const r=RETAILERS.find(r=>r.id===id);
+  if(r){S.confirmedFormat=r;S.metadata.retailer=r.name;}
+  render();
+}
+function toggleSheet(name){const i=S.selectedSheets.indexOf(name);if(i>=0)S.selectedSheets.splice(i,1);else S.selectedSheets.push(name);render();}
+function toggleAllSheets(){
+  const allSheets=[];S.files.forEach(f=>{if(f.workbook)f.workbook.SheetNames.forEach(sn=>{if(!allSheets.includes(sn))allSheets.push(sn);});});
+  S.selectedSheets=S.selectedSheets.length===allSheets.length?[]:[...allSheets];render();
+}
+function resetAll(){
+  Object.assign(S,{step:"upload",files:[],confirmedFormat:null,selectedSheets:[],blankSkuCode:false,
+    metadata:{retailer:"",period_type:"WEEKLY",location_type:"TOTAL"},
+    parsedRows:[],parseError:null,parseStats:null,exportData:{csv:"",filename:""},processing:false});
+  $("fileInput").value="";render();
+}
+
+function doParse(){
+  S.parseError=null;
+  try{
+    const allRows=[];
+    const meta={...S.metadata};
+    const fmt=S.confirmedFormat;
+    if(!fmt){S.parseError="No format selected";render();return;}
+
+    for(const entry of S.files){
+      let result;
+      // Per-file dates are the primary source
+      const fileMeta = {...meta, period_start: entry.dates.period_start, period_end: entry.dates.period_end};
+
+      switch(fmt.id){
+        case "argos_sales": result=parseArgosSales(entry.fileData,fileMeta); break;
+        case "argos_stock": result=parseArgosStock(entry.fileData,fileMeta); if(result.detectedDate&&!fileMeta.period_start){fileMeta.period_start=result.detectedDate;fileMeta.period_end=result.detectedDate;} break;
+        case "john_lewis": result=parseJohnLewis(entry.fileData,fileMeta); break;
+        case "dunelm": result=parseDunelm(entry.workbook,fileMeta,S.selectedSheets); break;
+        case "sainsburys": result=parseSainsburys(entry.fileData,fileMeta); break;
+        case "selfridges": result=parseSelfridges(entry.fileData,fileMeta); break;
+        case "fenwick": result=parseFenwick(entry.fileData,fileMeta); break;
+        default: result={error:"Unknown format: "+fmt.id};
+      }
+      if(result.error){S.parseError=`Error in "${entry.file.name}": ${result.error}`;render();return;}
+
+      // Tag rows with source filename and apply per-file dates where row doesn't have its own
+      const rows=(result.rows||[]).map(r=>({...r,
+        source_filename: entry.file.name,
+        period_start: r.period_start || fileMeta.period_start,
+        period_end: r.period_end || fileMeta.period_end,
+      }));
+      allRows.push(...rows);
+    }
+
+    // Apply SKU blanking if toggled
+    if(S.blankSkuCode){
+      for(const r of allRows){
+        r.sku_retailer_code = r.sku_code; // Preserve in retailer code field
+        r.sku_code = "";
+        r.sku_source = "BLANKED";
+      }
+    }
+
+    // Add import metadata
+    const importId=generateImportId(meta.retailer||"UNKNOWN"),ts=new Date().toISOString();
+    S.parsedRows=allRows.map(r=>({...r,import_id:importId,import_timestamp:ts,retailer:r.retailer||meta.retailer}));
+
+    const skus=new Set(S.parsedRows.map(r=>r.sku_code)),dtypes=new Set(S.parsedRows.flatMap(r=>(r.data_types||"").split("|").filter(Boolean))),locs=new Set(S.parsedRows.map(r=>r.location_type)),periods=new Set(S.parsedRows.map(r=>r.period_start));
+    S.parseStats={rowCount:S.parsedRows.length,skuCount:skus.size,dataTypes:[...dtypes],locationTypes:[...locs],periodCount:periods.size,importId,fileCount:S.files.length};
+    S.step="preview";render();
+  }catch(err){S.parseError="Parse error: "+err.message;render();}
+}
+
+function renderPreview(){
+  const ps=S.parseStats,cols=["sku_code","product_description","period_start","location_type","location_name","sales_units","stock_units","demand_units","returns_units","availability_pct","source_filename","data_types"];
+  let html=`<div class="stats-grid">`;
+  [{l:"Rows",v:ps?.rowCount},{l:"SKUs",v:ps?.skuCount},{l:"Files",v:ps?.fileCount},{l:"Periods",v:ps?.periodCount},{l:"Data Types",v:(ps?.dataTypes||[]).join(", ")},{l:"Location Grain",v:(ps?.locationTypes||[]).join(", ")}].forEach(s=>{
+    html+=`<div class="stat-card"><div class="stat-label">${s.l}</div><div class="stat-value">${s.v}</div></div>`;
+  });
+  html+=`</div>`;
+  const allPeriods=S.parsedRows.map(r=>r.period_start).filter(Boolean).sort();
+  const overallStart=allPeriods[0]||'?', overallEnd=allPeriods[allPeriods.length-1]||'?';
+  html+=`<div class="classification"><strong>This import will produce:</strong> ${ps?.rowCount} harmonised rows from <strong>${ps?.fileCount} file${ps?.fileCount>1?'s':''}</strong> for <strong>${S.metadata.retailer}</strong> covering ${overallStart} to ${overallEnd}. Metrics: ${(ps?.dataTypes||[]).map(d=>`<span class="badge badge-green">${d}</span>`).join(" ")} at ${(ps?.locationTypes||[]).map(d=>`<span class="badge badge-blue">${d}</span>`).join(" ")} level.</div>`;
+  if(S.blankSkuCode) html+=`<div class="warning-bar">⚠ SKU code column has been blanked. Retailer codes are preserved in sku_retailer_code.</div>`;
+  html+=`<div class="section-label">Data Preview</div><div class="data-table-wrap"><table class="data-table"><thead><tr>`;
+  cols.forEach(c=>{html+=`<th>${c}</th>`;});
+  html+=`</tr></thead><tbody>`;
+  S.parsedRows.slice(0,100).forEach(row=>{html+=`<tr>`;cols.forEach(c=>{html+=`<td>${row[c]!=null?String(row[c]):""}</td>`;});html+=`</tr>`;});
+  html+=`</tbody></table>`;
+  if(S.parsedRows.length>100) html+=`<div class="table-footer">Showing 100 of ${S.parsedRows.length} rows</div>`;
+  html+=`</div><div class="actions">
+    <button class="btn btn-outline" onclick="S.step='detect';render()">← Back</button>
+    <button class="btn btn-success" onclick="doExport()">⬇ Download Harmonised CSV</button>
+  </div>`;
+  main.innerHTML=html;
+}
+
+function doExport(){
+  if(!S.parsedRows.length)return;
+  const slug=(S.metadata.retailer||"unknown").toLowerCase().replace(/[^a-z0-9]/g,"_");
+  const allDates=S.parsedRows.map(r=>r.period_start).filter(Boolean).sort();
+  const ps=(allDates[0]||"").replace(/-/g,""),pe=(allDates[allDates.length-1]||"").replace(/-/g,"");
+  const fname=`harmonised_${slug}_${ps}_${pe}_001.csv`;
+  const csv=rowsToCsv(OUTPUT_COLUMNS,S.parsedRows);
+  S.exportData={csv,filename:fname};
+  downloadBlob(csv,fname);
+  S.step="export";render();
+}
+
+function renderExport(){
+  const ps=S.parseStats,ed=S.exportData;
+  main.innerHTML=`<div style="padding:32px 0">
+    <div class="done-center">
+      <div class="done-icon"><svg width="28" height="28" fill="none" stroke="var(--success)" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+      <h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Import Complete</h2>
+      <p style="font-size:14px;color:var(--text-muted)"><strong>${ps?.rowCount}</strong> rows from <strong>${ps?.fileCount} file${ps?.fileCount>1?'s':''}</strong> for <strong>${S.metadata.retailer}</strong></p>
+    </div>
+    <div class="export-card">
+      <div class="export-card-header">
+        <div><div class="export-card-title">Harmonised Data CSV</div><div class="export-card-sub">${ed.filename}</div></div>
+        <button class="btn btn-accent btn-sm" onclick="downloadBlob(S.exportData.csv,'${ed.filename}')">⬇ Download Again</button>
+      </div>
+      <div class="export-hint">Save this file to your SharePoint output folder (Parsed Files).</div>
+    </div>
+    <div style="display:flex;gap:12px;justify-content:center;margin-top:24px">
+      <button class="btn btn-outline" onclick="S.step='preview';render()">← Back to Preview</button>
+      <button class="btn btn-accent" onclick="resetAll()">+ Import Another Batch</button>
+    </div>
+  </div>`;
+}
+
+// ─── INIT ───
+render();
+</script>
+
+</body>
+</html>
