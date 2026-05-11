@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Retailer Data Importer v0.3.5</title>
+<title>Retailer Data Importer</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -99,7 +99,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
     </div>
     <div>
       <div class="header-title">Retailer Data Importer</div>
-      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.5</div>
+      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; <span id="versionLabel"></span></div>
     </div>
   </div>
   <div class="steps" id="stepIndicator"></div>
@@ -708,6 +708,8 @@ function renderExport(){
 }
 
 // ─── INIT ───
+document.title = `Retailer Data Importer v${APP_VERSION}`;
+const vl = document.getElementById("versionLabel"); if(vl) vl.textContent = `v${APP_VERSION}`;
 render();
 </script>
 

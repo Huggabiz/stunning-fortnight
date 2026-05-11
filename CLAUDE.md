@@ -80,7 +80,7 @@ Adding a new retailer = a new entry in the `RETAILERS` detection array + a new p
 
 - **Direct, practical outputs.** No scaffolding the user didn't ask for. No "future-proofing" abstractions. Three similar lines beats a premature helper.
 - **Iterative, build-and-test.** Hugo prefers seeing a working change quickly over a long plan.
-- **Version visible in the page.** The header in `index.html` shows the current version (`v0.X.Y`). Bump it whenever functional behaviour changes; keep `APP_VERSION` in the script in sync.
+- **Version visible in the page.** Bump `APP_VERSION` in the `<script>` — the title and header banner read from it via `document.title` and `#versionLabel`, so there's a single source of truth.
 - **CSV export filenames carry context, not a tool version.** Format: `harmonised_{retailer}_{YYYYMMDD}_{YYYYMMDD}_{NNN}.csv` where `NNN` increments per output file in a batch (`001`, `002`, …). Built in `buildExportFiles()`.
 - **Commit messages: imperative, brief, explain the why if non-obvious.** One-liner is fine for small changes.
 - **Raw M code for Power Query.** No `.xlsx` generation; queries are pasted into Excel's Advanced Editor.
