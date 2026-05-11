@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Retailer Data Importer v0.3.3</title>
+<title>Retailer Data Importer v0.3.4</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -99,7 +99,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
     </div>
     <div>
       <div class="header-title">Retailer Data Importer</div>
-      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.3</div>
+      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.4</div>
     </div>
   </div>
   <div class="steps" id="stepIndicator"></div>
@@ -110,7 +110,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
 <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple style="display:none">
 
 <script>
-const APP_VERSION = "0.3.3";
+const APP_VERSION = "0.3.4";
 
 // ─── STATE ───
 const S = {
@@ -124,6 +124,7 @@ const S = {
   parsedRows: [], parseError: null, parseStats: null,
   exportData: { csv: "", filename: "" },
   processing: false,
+  outputFolder: null,   // FileSystemDirectoryHandle, remembered across exports in this session
 };
 
 // ─── UTILITIES ───
@@ -468,7 +469,15 @@ function renderPreview(){
   displayRows.slice(0,100).forEach(row=>{html+=`<tr>`;cols.forEach(c=>{html+=`<td>${row[c]!=null?String(row[c]):""}</td>`;});html+=`</tr>`;});
   html+=`</tbody></table>`;
   if(displayRows.length>100) html+=`<div class="table-footer">Showing 100 of ${displayRows.length} rows</div>`;
-  html+=`</div><div class="actions">
+  html+=`</div>`;
+  if('showDirectoryPicker' in window){
+    if(S.outputFolder){
+      html+=`<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Saving to folder: <strong style="color:var(--text)">${S.outputFolder.name}</strong> &middot; <a href="#" onclick="event.preventDefault();pickOutputFolder()" style="color:var(--accent);text-decoration:none">Change</a> &middot; <a href="#" onclick="event.preventDefault();clearOutputFolder()" style="color:var(--text-muted);text-decoration:none">Forget</a></div>`;
+    } else {
+      html+=`<div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">You'll be asked to pick an output folder. <a href="#" onclick="event.preventDefault();pickOutputFolder()" style="color:var(--accent);text-decoration:none">Pick now</a></div>`;
+    }
+  }
+  html+=`<div class="actions">
     <button class="btn btn-outline" onclick="S.step='detect';render()">← Back</button>
     <button class="btn btn-success" onclick="doExport()">⬇ Save Harmonised CSVs</button>
   </div>`;
@@ -497,13 +506,42 @@ function buildExportFiles(){
   return out;
 }
 
+async function ensureFolderAccess(handle){
+  const opts={mode:"readwrite"};
+  if((await handle.queryPermission(opts))==="granted") return true;
+  return (await handle.requestPermission(opts))==="granted";
+}
+
+async function pickOutputFolder(){
+  if(!('showDirectoryPicker' in window)) return null;
+  try{
+    const dir=await window.showDirectoryPicker({mode:"readwrite"});
+    S.outputFolder=dir;
+    render();
+    return dir;
+  }catch(err){
+    if(err.name!=="AbortError") console.error(err);
+    return null;
+  }
+}
+
+async function clearOutputFolder(){
+  S.outputFolder=null;
+  render();
+}
+
 async function doExport(){
   if(!S.parsedRows.length)return;
   const files=buildExportFiles();
-  let savedVia="download";
+  let savedVia="download",folderName=null;
   if('showDirectoryPicker' in window){
     try{
-      const dir=await window.showDirectoryPicker({mode:"readwrite"});
+      let dir=S.outputFolder;
+      if(dir && !(await ensureFolderAccess(dir))) dir=null;
+      if(!dir){
+        dir=await window.showDirectoryPicker({mode:"readwrite"});
+        S.outputFolder=dir;
+      }
       for(const f of files){
         const fh=await dir.getFileHandle(f.filename,{create:true});
         const w=await fh.createWritable();
@@ -511,6 +549,7 @@ async function doExport(){
         await w.close();
       }
       savedVia="folder";
+      folderName=dir.name;
     }catch(err){
       if(err.name==="AbortError") return;
       for(const f of files) downloadBlob(f.csv,f.filename);
@@ -521,7 +560,7 @@ async function doExport(){
       await new Promise(r=>setTimeout(r,150));
     }
   }
-  S.exportData={files,savedVia};
+  S.exportData={files,savedVia,folderName};
   S.step="export";render();
 }
 
@@ -533,7 +572,7 @@ function downloadExportFile(i){
 function renderExport(){
   const ps=S.parseStats,ed=S.exportData,files=ed.files||[];
   const savedMsg=ed.savedVia==="folder"
-    ? `Saved <strong>${files.length}</strong> CSV${files.length>1?'s':''} to the folder you picked.`
+    ? `Saved <strong>${files.length}</strong> CSV${files.length>1?'s':''} to <strong>${ed.folderName||'the folder you picked'}</strong>.`
     : `Downloaded <strong>${files.length}</strong> CSV${files.length>1?'s':''} to your default downloads folder.`;
   let cards="";
   files.forEach((f,i)=>{
