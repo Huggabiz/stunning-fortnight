@@ -72,7 +72,7 @@ Adding a new retailer = a new entry in the `RETAILERS` detection array + a new p
 5. **Deduplication happens in Power Query, not the importer.** Every row gets `import_id` + `import_timestamp`; the natural key is `retailer + sku_code + period_start + period_end + location_type + location_name`. The importer does not try to detect or merge overlaps.
 6. **No import log CSV.** Was in v0.2.0, removed in v0.3.1. Every harmonised row already carries `import_id` and `import_timestamp`; the separate log added no value.
 7. **One harmonised CSV per source file.** Multi-file upload produces one CSV for each input file, named with a sequence number (`_001`, `_002`, …) to disambiguate when retailer + dates collide. Format consistency is still enforced — adding a different format to an existing batch is blocked. (Earlier versions merged into a single combined CSV; changed in v0.3.3.)
-8. **Save dialog uses File System Access API where available, falls back to auto-download.** Chrome/Edge desktop get a folder picker (`showDirectoryPicker`) so all CSVs land in one chosen location. Safari/iPad/Firefox fall back to sequential browser downloads. Don't drop the fallback — iPad support is a hard requirement.
+8. **Save dialog uses File System Access API where available, falls back to auto-download.** Chrome/Edge desktop get a folder picker (`showDirectoryPicker`) so all CSVs land in one chosen location. The folder handle is remembered in `S.outputFolder` for the rest of the browser session — subsequent exports reuse it (with a permission re-check), and `resetAll()` preserves it so the next batch saves to the same place. Safari/iPad/Firefox fall back to sequential browser downloads. Don't drop the fallback — iPad support is a hard requirement.
 
 ## Working conventions
 
