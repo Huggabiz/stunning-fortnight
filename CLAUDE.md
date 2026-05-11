@@ -60,6 +60,8 @@ Each parser is hard-coded and lives inline in `index.html`. Detection uses filen
 | `sainsburys` | XLSX, multi-level header | WEEKLY / TOTAL | SALES |
 | `selfridges` | XLSX, week-number filename | WEEKLY / TOTAL | SALES, STOCK |
 | `fenwick` | XLSX, ~140 cols, store blocks | SNAPSHOT / STORE+WAREHOUSE+ONLINE | SALES, STOCK |
+| `robert_dyas` | XLS, SKU × store grid (`<code> Sales`/`<code> Stock` pairs); week-number filename | WEEKLY / STORE | SALES, STOCK |
+| `next` | CSV, one row per SKU; YYYYMMDD filename = week-end (Fri) | WEEKLY / TOTAL | SALES, STOCK, RETURNS |
 
 Adding a new retailer = a new entry in the `RETAILERS` detection array + a new parser function. Follow the existing pattern; return `{rows: [...]}` or `{error: "..."}`.
 
