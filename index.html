@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Retailer Data Importer v0.3.0</title>
+<title>Retailer Data Importer v0.3.2</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -99,7 +99,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
     </div>
     <div>
       <div class="header-title">Retailer Data Importer</div>
-      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.1</div>
+      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.2</div>
     </div>
   </div>
   <div class="steps" id="stepIndicator"></div>
@@ -110,7 +110,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
 <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple style="display:none">
 
 <script>
-const APP_VERSION = "0.3.1";
+const APP_VERSION = "0.3.2";
 
 // ─── STATE ───
 const S = {
@@ -363,12 +363,8 @@ function renderDetect(){
     }
   }
 
-  // SKU blanking toggle
-  html+=`<div class="section-label">Options</div>`;
-  html+=`<label class="toggle-row"><input type="checkbox" ${S.blankSkuCode?'checked':''} onchange="S.blankSkuCode=this.checked"> <div><strong>Blank out SKU code column</strong><br><span style="font-size:12px;color:var(--text-muted)">Use this when the file only contains the retailer's own product codes, not JJ SKU codes. The sku_code field will be left empty — the retailer code is still captured in sku_retailer_code.</span></div></label>`;
-
   // Period type (global)
-  html+=`<div class="section-label" style="margin-top:16px">Period Type</div>
+  html+=`<div class="section-label">Period Type</div>
   <div style="margin-bottom:24px"><select onchange="S.metadata.period_type=this.value" style="padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:'DM Sans',sans-serif;">
     <option value="DAILY" ${S.metadata.period_type==="DAILY"?"selected":""}>Daily</option>
     <option value="WEEKLY" ${S.metadata.period_type==="WEEKLY"?"selected":""}>Weekly</option>
@@ -438,15 +434,6 @@ function doParse(){
       allRows.push(...rows);
     }
 
-    // Apply SKU blanking if toggled
-    if(S.blankSkuCode){
-      for(const r of allRows){
-        r.sku_retailer_code = r.sku_code; // Preserve in retailer code field
-        r.sku_code = "";
-        r.sku_source = "BLANKED";
-      }
-    }
-
     // Add import metadata
     const importId=generateImportId(meta.retailer||"UNKNOWN"),ts=new Date().toISOString();
     S.parsedRows=allRows.map(r=>({...r,import_id:importId,import_timestamp:ts,retailer:r.retailer||meta.retailer}));
@@ -457,8 +444,14 @@ function doParse(){
   }catch(err){S.parseError="Parse error: "+err.message;render();}
 }
 
+function getDisplayRows(){
+  if(!S.blankSkuCode) return S.parsedRows;
+  return S.parsedRows.map(r=>({...r, sku_retailer_code:r.sku_code, sku_code:"", sku_source:"BLANKED"}));
+}
+
 function renderPreview(){
   const ps=S.parseStats,cols=["sku_code","product_description","period_start","location_type","location_name","sales_units","stock_units","demand_units","returns_units","availability_pct","source_filename","data_types"];
+  const displayRows=getDisplayRows();
   let html=`<div class="stats-grid">`;
   [{l:"Rows",v:ps?.rowCount},{l:"SKUs",v:ps?.skuCount},{l:"Files",v:ps?.fileCount},{l:"Periods",v:ps?.periodCount},{l:"Data Types",v:(ps?.dataTypes||[]).join(", ")},{l:"Location Grain",v:(ps?.locationTypes||[]).join(", ")}].forEach(s=>{
     html+=`<div class="stat-card"><div class="stat-label">${s.l}</div><div class="stat-value">${s.v}</div></div>`;
@@ -467,13 +460,14 @@ function renderPreview(){
   const allPeriods=S.parsedRows.map(r=>r.period_start).filter(Boolean).sort();
   const overallStart=allPeriods[0]||'?', overallEnd=allPeriods[allPeriods.length-1]||'?';
   html+=`<div class="classification"><strong>This import will produce:</strong> ${ps?.rowCount} harmonised rows from <strong>${ps?.fileCount} file${ps?.fileCount>1?'s':''}</strong> for <strong>${S.metadata.retailer}</strong> covering ${overallStart} to ${overallEnd}. Metrics: ${(ps?.dataTypes||[]).map(d=>`<span class="badge badge-green">${d}</span>`).join(" ")} at ${(ps?.locationTypes||[]).map(d=>`<span class="badge badge-blue">${d}</span>`).join(" ")} level.</div>`;
+  html+=`<label class="toggle-row"><input type="checkbox" ${S.blankSkuCode?'checked':''} onchange="S.blankSkuCode=this.checked;render()"> <div><strong>Check box if SKU code is not the JJ SKU</strong></div></label>`;
   if(S.blankSkuCode) html+=`<div class="warning-bar">⚠ SKU code column has been blanked. Retailer codes are preserved in sku_retailer_code.</div>`;
   html+=`<div class="section-label">Data Preview</div><div class="data-table-wrap"><table class="data-table"><thead><tr>`;
   cols.forEach(c=>{html+=`<th>${c}</th>`;});
   html+=`</tr></thead><tbody>`;
-  S.parsedRows.slice(0,100).forEach(row=>{html+=`<tr>`;cols.forEach(c=>{html+=`<td>${row[c]!=null?String(row[c]):""}</td>`;});html+=`</tr>`;});
+  displayRows.slice(0,100).forEach(row=>{html+=`<tr>`;cols.forEach(c=>{html+=`<td>${row[c]!=null?String(row[c]):""}</td>`;});html+=`</tr>`;});
   html+=`</tbody></table>`;
-  if(S.parsedRows.length>100) html+=`<div class="table-footer">Showing 100 of ${S.parsedRows.length} rows</div>`;
+  if(displayRows.length>100) html+=`<div class="table-footer">Showing 100 of ${displayRows.length} rows</div>`;
   html+=`</div><div class="actions">
     <button class="btn btn-outline" onclick="S.step='detect';render()">← Back</button>
     <button class="btn btn-success" onclick="doExport()">⬇ Download Harmonised CSV</button>
@@ -483,11 +477,12 @@ function renderPreview(){
 
 function doExport(){
   if(!S.parsedRows.length)return;
+  const displayRows=getDisplayRows();
   const slug=(S.metadata.retailer||"unknown").toLowerCase().replace(/[^a-z0-9]/g,"_");
-  const allDates=S.parsedRows.map(r=>r.period_start).filter(Boolean).sort();
+  const allDates=displayRows.map(r=>r.period_start).filter(Boolean).sort();
   const ps=(allDates[0]||"").replace(/-/g,""),pe=(allDates[allDates.length-1]||"").replace(/-/g,"");
   const fname=`harmonised_${slug}_${ps}_${pe}_001.csv`;
-  const csv=rowsToCsv(OUTPUT_COLUMNS,S.parsedRows);
+  const csv=rowsToCsv(OUTPUT_COLUMNS,displayRows);
   S.exportData={csv,filename:fname};
   downloadBlob(csv,fname);
   S.step="export";render();
