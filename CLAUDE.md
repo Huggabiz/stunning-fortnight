@@ -71,14 +71,15 @@ Adding a new retailer = a new entry in the `RETAILERS` detection array + a new p
 4. **SKU blanking toggle, not forced master lookup.** When a file only contains retailer codes, the user toggles "Blank out SKU code"; the retailer code is preserved in `sku_retailer_code` and `sku_source` is set to `BLANKED`. SKU master lookup is deferred future work, not a blocker.
 5. **Deduplication happens in Power Query, not the importer.** Every row gets `import_id` + `import_timestamp`; the natural key is `retailer + sku_code + period_start + period_end + location_type + location_name`. The importer does not try to detect or merge overlaps.
 6. **No import log CSV.** Was in v0.2.0, removed in v0.3.1. Every harmonised row already carries `import_id` and `import_timestamp`; the separate log added no value.
-7. **Single combined CSV per batch.** Multi-file upload of the same retailer format produces one CSV. Format consistency is enforced — adding a different format to an existing batch is blocked.
+7. **One harmonised CSV per source file.** Multi-file upload produces one CSV for each input file, named with a sequence number (`_001`, `_002`, …) to disambiguate when retailer + dates collide. Format consistency is still enforced — adding a different format to an existing batch is blocked. (Earlier versions merged into a single combined CSV; changed in v0.3.3.)
+8. **Save dialog uses File System Access API where available, falls back to auto-download.** Chrome/Edge desktop get a folder picker (`showDirectoryPicker`) so all CSVs land in one chosen location. Safari/iPad/Firefox fall back to sequential browser downloads. Don't drop the fallback — iPad support is a hard requirement.
 
 ## Working conventions
 
 - **Direct, practical outputs.** No scaffolding the user didn't ask for. No "future-proofing" abstractions. Three similar lines beats a premature helper.
 - **Iterative, build-and-test.** Hugo prefers seeing a working change quickly over a long plan.
 - **Version visible in the page.** The header in `index.html` shows the current version (`v0.X.Y`). Bump it whenever functional behaviour changes; keep `APP_VERSION` in the script in sync.
-- **CSV export filenames carry context, not a tool version.** Format: `harmonised_{retailer}_{YYYYMMDD}_{YYYYMMDD}_001.csv` (already implemented in `doExport()`).
+- **CSV export filenames carry context, not a tool version.** Format: `harmonised_{retailer}_{YYYYMMDD}_{YYYYMMDD}_{NNN}.csv` where `NNN` increments per output file in a batch (`001`, `002`, …). Built in `buildExportFiles()`.
 - **Commit messages: imperative, brief, explain the why if non-obvious.** One-liner is fine for small changes.
 - **Raw M code for Power Query.** No `.xlsx` generation; queries are pasted into Excel's Advanced Editor.
 

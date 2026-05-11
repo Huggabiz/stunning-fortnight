@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Retailer Data Importer v0.3.2</title>
+<title>Retailer Data Importer v0.3.3</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -99,7 +99,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
     </div>
     <div>
       <div class="header-title">Retailer Data Importer</div>
-      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.2</div>
+      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.3</div>
     </div>
   </div>
   <div class="steps" id="stepIndicator"></div>
@@ -110,7 +110,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
 <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple style="display:none">
 
 <script>
-const APP_VERSION = "0.3.2";
+const APP_VERSION = "0.3.3";
 
 // ─── STATE ───
 const S = {
@@ -470,39 +470,89 @@ function renderPreview(){
   if(displayRows.length>100) html+=`<div class="table-footer">Showing 100 of ${displayRows.length} rows</div>`;
   html+=`</div><div class="actions">
     <button class="btn btn-outline" onclick="S.step='detect';render()">← Back</button>
-    <button class="btn btn-success" onclick="doExport()">⬇ Download Harmonised CSV</button>
+    <button class="btn btn-success" onclick="doExport()">⬇ Save Harmonised CSVs</button>
   </div>`;
   main.innerHTML=html;
 }
 
-function doExport(){
-  if(!S.parsedRows.length)return;
+function buildExportFiles(){
   const displayRows=getDisplayRows();
   const slug=(S.metadata.retailer||"unknown").toLowerCase().replace(/[^a-z0-9]/g,"_");
-  const allDates=displayRows.map(r=>r.period_start).filter(Boolean).sort();
-  const ps=(allDates[0]||"").replace(/-/g,""),pe=(allDates[allDates.length-1]||"").replace(/-/g,"");
-  const fname=`harmonised_${slug}_${ps}_${pe}_001.csv`;
-  const csv=rowsToCsv(OUTPUT_COLUMNS,displayRows);
-  S.exportData={csv,filename:fname};
-  downloadBlob(csv,fname);
+  const groups=new Map();
+  for(const f of S.files) groups.set(f.file.name,[]);
+  for(const row of displayRows){
+    const k=row.source_filename||"unknown";
+    if(!groups.has(k)) groups.set(k,[]);
+    groups.get(k).push(row);
+  }
+  const out=[];let seq=1;
+  for(const [sourceName,rows] of groups){
+    if(!rows.length) continue;
+    const dates=rows.map(r=>r.period_start).filter(Boolean).sort();
+    const ps=(dates[0]||"").replace(/-/g,""),pe=(dates[dates.length-1]||"").replace(/-/g,"");
+    const filename=`harmonised_${slug}_${ps}_${pe}_${String(seq).padStart(3,"0")}.csv`;
+    out.push({filename,csv:rowsToCsv(OUTPUT_COLUMNS,rows),sourceName,rowCount:rows.length});
+    seq++;
+  }
+  return out;
+}
+
+async function doExport(){
+  if(!S.parsedRows.length)return;
+  const files=buildExportFiles();
+  let savedVia="download";
+  if('showDirectoryPicker' in window){
+    try{
+      const dir=await window.showDirectoryPicker({mode:"readwrite"});
+      for(const f of files){
+        const fh=await dir.getFileHandle(f.filename,{create:true});
+        const w=await fh.createWritable();
+        await w.write(f.csv);
+        await w.close();
+      }
+      savedVia="folder";
+    }catch(err){
+      if(err.name==="AbortError") return;
+      for(const f of files) downloadBlob(f.csv,f.filename);
+    }
+  } else {
+    for(const f of files){
+      downloadBlob(f.csv,f.filename);
+      await new Promise(r=>setTimeout(r,150));
+    }
+  }
+  S.exportData={files,savedVia};
   S.step="export";render();
 }
 
+function downloadExportFile(i){
+  const f=S.exportData.files?.[i];
+  if(f) downloadBlob(f.csv,f.filename);
+}
+
 function renderExport(){
-  const ps=S.parseStats,ed=S.exportData;
+  const ps=S.parseStats,ed=S.exportData,files=ed.files||[];
+  const savedMsg=ed.savedVia==="folder"
+    ? `Saved <strong>${files.length}</strong> CSV${files.length>1?'s':''} to the folder you picked.`
+    : `Downloaded <strong>${files.length}</strong> CSV${files.length>1?'s':''} to your default downloads folder.`;
+  let cards="";
+  files.forEach((f,i)=>{
+    cards+=`<div class="export-card">
+      <div class="export-card-header">
+        <div><div class="export-card-title">${f.sourceName}</div><div class="export-card-sub">${f.filename} &middot; ${f.rowCount} rows</div></div>
+        <button class="btn btn-accent btn-sm" onclick="downloadExportFile(${i})">⬇ Download Again</button>
+      </div>
+    </div>`;
+  });
   main.innerHTML=`<div style="padding:32px 0">
     <div class="done-center">
       <div class="done-icon"><svg width="28" height="28" fill="none" stroke="var(--success)" stroke-width="2" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
       <h2 style="font-size:20px;font-weight:700;margin-bottom:6px">Import Complete</h2>
       <p style="font-size:14px;color:var(--text-muted)"><strong>${ps?.rowCount}</strong> rows from <strong>${ps?.fileCount} file${ps?.fileCount>1?'s':''}</strong> for <strong>${S.metadata.retailer}</strong></p>
+      <p style="font-size:13px;color:var(--text-muted);margin-top:8px">${savedMsg}</p>
     </div>
-    <div class="export-card">
-      <div class="export-card-header">
-        <div><div class="export-card-title">Harmonised Data CSV</div><div class="export-card-sub">${ed.filename}</div></div>
-        <button class="btn btn-accent btn-sm" onclick="downloadBlob(S.exportData.csv,'${ed.filename}')">⬇ Download Again</button>
-      </div>
-      <div class="export-hint">Save this file to your SharePoint output folder (Parsed Files).</div>
-    </div>
+    ${cards}
+    <div class="export-hint" style="text-align:center;margin-top:8px">Place these files in your SharePoint output folder (Parsed Files).</div>
     <div style="display:flex;gap:12px;justify-content:center;margin-top:24px">
       <button class="btn btn-outline" onclick="S.step='preview';render()">← Back to Preview</button>
       <button class="btn btn-accent" onclick="resetAll()">+ Import Another Batch</button>
