@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/github-repo-setup-kbHxw]
   workflow_dispatch:
 
 permissions:
