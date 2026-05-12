@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Retailer Data Importer v0.3.4</title>
+<title>Retailer Data Importer</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -99,7 +99,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
     </div>
     <div>
       <div class="header-title">Retailer Data Importer</div>
-      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; v0.3.4</div>
+      <div class="header-sub">Sell-out &amp; stock harmonisation tool &middot; <span id="versionLabel"></span></div>
     </div>
   </div>
   <div class="steps" id="stepIndicator"></div>
@@ -110,7 +110,7 @@ body { min-height: 100vh; background: var(--bg); font-family: 'DM Sans', 'Segoe 
 <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" multiple style="display:none">
 
 <script>
-const APP_VERSION = "0.3.4";
+const APP_VERSION = "0.3.5";
 
 // ─── STATE ───
 const S = {
@@ -150,6 +150,8 @@ const RETAILERS = [
   { id: "sainsburys", name: "Sainsbury's", detect: (f,r) => /sainsbury/i.test(f) || r?.some?.(row => row?.some?.(c => /Supplier Sales Report/i.test(cleanStr(c)))) },
   { id: "selfridges", name: "Selfridges", detect: (f,r) => /selfridge/i.test(f) || (r?.[0]?.some?.(c => /joseph\s*joseph/i.test(cleanStr(c))) && r?.[3]?.some?.(c => /SPTI/i.test(cleanStr(c)))) },
   { id: "fenwick", name: "Fenwick", detect: (f,r) => /fenwick/i.test(f) || /BIREP/i.test(f) || (r?.[0]?.some?.(c => /NEWCASTLE/i.test(cleanStr(c))) && r?.[0]?.some?.(c => /KINGSTON/i.test(cleanStr(c)))) },
+  { id: "robert_dyas", name: "Robert Dyas", detect: (f,r) => /^week[\s_]*\d+[\s_]*\d{4}/i.test(f) || r?.[0]?.some?.(c => /^Chain Sales$/i.test(cleanStr(c))) },
+  { id: "next", name: "Next", detect: (f,r) => /BrandWeeklyStock/i.test(f) || (r?.[0]?.some?.(c => /^ItemOptionNumber$/i.test(cleanStr(c))) && r?.[0]?.some?.(c => /^ClosingStockBalance$/i.test(cleanStr(c)))) },
 ];
 const detectRetailer = (fname, rows, sheetNames) => { for (const r of RETAILERS) { try { if (r.detect(fname, rows, sheetNames)) return r; } catch {} } return null; };
 
@@ -206,6 +208,102 @@ const parseFenwick = (data, meta) => {
   return {rows:results};
 };
 
+const parseRobertDyas = (data, meta) => {
+  const rows = data;
+  if(rows.length < 2) return {error: "File too short for Robert Dyas format"};
+  const headers = (rows[0] || []).map(c => cleanStr(c));
+  const partNoCol = headers.findIndex(h => /^part\s*no$/i.test(h));
+  const skuCol = headers.findIndex(h => /^sku$/i.test(h));
+  const descCol = headers.findIndex(h => /^description$/i.test(h));
+  if(partNoCol < 0) return {error: "Robert Dyas: cannot find 'Part No' column"};
+  const storeMap = new Map();
+  for(let c = 0; c < headers.length; c++){
+    const m = headers[c].match(/^(\d{3,6})\s+(Sales|Stock)$/i);
+    if(!m) continue;
+    const code = m[1], kind = m[2].toLowerCase() + "Col";
+    if(!storeMap.has(code)) storeMap.set(code, {salesCol:-1, stockCol:-1});
+    storeMap.get(code)[kind] = c;
+  }
+  const results = [];
+  for(let r = 1; r < rows.length; r++){
+    const row = rows[r]; if(!row) continue;
+    const partNo = cleanStr(row[partNoCol]); if(!partNo) continue;
+    const retailerSku = skuCol >= 0 ? cleanStr(row[skuCol]) : "";
+    const desc = descCol >= 0 ? cleanStr(row[descCol]) : "";
+    for(const [code, cols] of storeMap){
+      const sales = cols.salesCol >= 0 ? cleanNum(row[cols.salesCol]) : null;
+      const stock = cols.stockCol >= 0 ? cleanNum(row[cols.stockCol]) : null;
+      if((sales == null || sales === 0) && (stock == null || stock === 0)) continue;
+      const dt = [sales != null ? "SALES" : null, stock != null ? "STOCK" : null].filter(Boolean).join("|");
+      results.push({
+        retailer: "Robert Dyas",
+        period_start: meta.period_start, period_end: meta.period_end, period_type: "WEEKLY",
+        sku_code: partNo, sku_source: "JJ_SKU", sku_retailer_code: retailerSku,
+        product_description: desc, ean: "",
+        location_type: "STORE", location_name: code,
+        sales_units: sales, returns_units: null, demand_units: null,
+        stock_units: stock, stock_available: null, stock_in_transit: null, stock_on_order: null,
+        weeks_cover: null, availability_pct: null, serviceability_pct: null,
+        data_types: dt
+      });
+    }
+  }
+  return {rows: results};
+};
+
+const parseNext = (data, meta) => {
+  const rows = data;
+  if(rows.length < 2) return {error: "File too short for Next format"};
+  const headers = (rows[0] || []).map(c => cleanStr(c));
+  const findCol = name => headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+  const col = {
+    item: findCol("ItemOptionNumber"), style: findCol("ProductStyle"),
+    desc: findCol("ItemDescription"), ean: findCol("EAN"),
+    sales: findCol("Sales"), returns: findCol("Returns"),
+    closing: findCol("ClosingStockBalance"), inTransit: findCol("InTransit"),
+    brand: findCol("BrandName"),
+  };
+  if(col.item < 0) return {error: "Next: cannot find ItemOptionNumber column"};
+  const results = [];
+  for(let r = 1; r < rows.length; r++){
+    const row = rows[r]; if(!row) continue;
+    const item = cleanStr(row[col.item]); if(!item) continue;
+    const brand = col.brand >= 0 ? cleanStr(row[col.brand]) : "";
+    if(brand && !/joseph/i.test(brand)) continue;
+    const style = col.style >= 0 ? cleanStr(row[col.style]) : "";
+    let ean = "";
+    if(col.ean >= 0){
+      const v = row[col.ean];
+      if(typeof v === "number") ean = String(Math.round(v));
+      else if(v != null){
+        const s = String(v).trim();
+        if(/^\d+$/.test(s)) ean = s;
+        else if(/[eE]/.test(s)){ const n = Number(s); if(!isNaN(n)) ean = String(Math.round(n)); }
+      }
+    }
+    results.push({
+      retailer: "Next",
+      period_start: meta.period_start, period_end: meta.period_end, period_type: "WEEKLY",
+      sku_code: style || item,
+      sku_source: style ? "JJ_SKU" : "RETAILER_CODE",
+      sku_retailer_code: item,
+      product_description: col.desc >= 0 ? cleanStr(row[col.desc]) : "",
+      ean,
+      location_type: "TOTAL", location_name: "",
+      sales_units: col.sales >= 0 ? cleanNum(row[col.sales]) : null,
+      returns_units: col.returns >= 0 ? cleanNum(row[col.returns]) : null,
+      demand_units: null,
+      stock_units: col.closing >= 0 ? cleanNum(row[col.closing]) : null,
+      stock_available: null,
+      stock_in_transit: col.inTransit >= 0 ? cleanNum(row[col.inTransit]) : null,
+      stock_on_order: null,
+      weeks_cover: null, availability_pct: null, serviceability_pct: null,
+      data_types: "SALES|STOCK|RETURNS"
+    });
+  }
+  return {rows: results};
+};
+
 // ─── DATE INFERENCE (per file) ───
 function inferDates(f, rawData, det, sheetNames) {
   const dates = { period_start: "", period_end: "", period_type: "WEEKLY" };
@@ -231,6 +329,14 @@ function inferDates(f, rawData, det, sheetNames) {
     if(sd.length){sd.sort((a,b)=>a-b);dates.period_start=fmtDate(sd[0]);dates.period_end=fmtDate(sd[sd.length-1]);}
   } else if (det.id==="fenwick") {
     dates.period_type="SNAPSHOT";const fd=f.name.match(/(\d{4})(\d{2})(\d{2})/);if(fd){const d=fmtDate(new Date(+fd[1],+fd[2]-1,+fd[3]));dates.period_start=d;dates.period_end=d;}
+  } else if (det.id==="robert_dyas") {
+    dates.period_type="WEEKLY";
+    const m=f.name.match(/week[\s_]*(\d+)[\s_]*(\d{4})/i);
+    if(m){const wk=parseInt(m[1]),yr=parseInt(m[2]),jan4=new Date(yr,0,4),dow=jan4.getDay()||7,wk1Mon=new Date(jan4);wk1Mon.setDate(jan4.getDate()-(dow-1));const ws=new Date(wk1Mon);ws.setDate(wk1Mon.getDate()+(wk-1)*7);const we=new Date(ws);we.setDate(ws.getDate()+6);dates.period_start=fmtDate(ws);dates.period_end=fmtDate(we);}
+  } else if (det.id==="next") {
+    dates.period_type="WEEKLY";
+    const m=f.name.match(/(\d{4})(\d{2})(\d{2})/);
+    if(m){const end=new Date(+m[1],+m[2]-1,+m[3]);const start=new Date(end);start.setDate(end.getDate()-6);dates.period_start=fmtDate(start);dates.period_end=fmtDate(end);}
   }
   return dates;
 }
@@ -256,7 +362,7 @@ function renderUpload(){
       <svg width="40" height="40" fill="none" stroke="var(--accent)" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
       <h3>Drop retailer files here</h3>
       <p>CSV or Excel (.xlsx) — select one or more files of the <strong>same retailer format</strong></p>
-      <p style="margin-top:8px;font-size:12px;color:var(--text-light)">Supported: Argos Sales, Argos Stock, John Lewis, Dunelm, Sainsbury's, Selfridges, Fenwick</p>
+      <p style="margin-top:8px;font-size:12px;color:var(--text-light)">Supported: Argos Sales, Argos Stock, John Lewis, Dunelm, Sainsbury's, Selfridges, Fenwick, Robert Dyas, Next</p>
     </div></div>`;
   const dz=$("dropZone");
   dz.addEventListener("click",()=>$("fileInput").click());
@@ -422,6 +528,8 @@ function doParse(){
         case "sainsburys": result=parseSainsburys(entry.fileData,fileMeta); break;
         case "selfridges": result=parseSelfridges(entry.fileData,fileMeta); break;
         case "fenwick": result=parseFenwick(entry.fileData,fileMeta); break;
+        case "robert_dyas": result=parseRobertDyas(entry.fileData,fileMeta); break;
+        case "next": result=parseNext(entry.fileData,fileMeta); break;
         default: result={error:"Unknown format: "+fmt.id};
       }
       if(result.error){S.parseError=`Error in "${entry.file.name}": ${result.error}`;render();return;}
@@ -600,6 +708,8 @@ function renderExport(){
 }
 
 // ─── INIT ───
+document.title = `Retailer Data Importer v${APP_VERSION}`;
+const vl = document.getElementById("versionLabel"); if(vl) vl.textContent = `v${APP_VERSION}`;
 render();
 </script>
 
